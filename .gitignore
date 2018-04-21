@@ -1,8 +1,5 @@
 
-hw3/bin/*
-hw3/csv/*
-
-
+__pycache__/*
 
 ## Core latex/pdflatex auxiliary files:
 *.aux
