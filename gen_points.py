@@ -59,6 +59,7 @@ def write_points_to_file(inner, boundary, stencil_size, filename=None):
     tree = cKDTree(np.array(nodes))
     nn = [tree.query(node, stencil_size)[1] for node in nodes]
 
+def write_points_to_file(inner, boundary, filename=None):
     if filename==None:
         filename = 'n'+ str(len(inner)) + '_nb' + str(len(boundary)) + '.dat'
     
@@ -93,4 +94,6 @@ def gen_points_file(
         n, n_boundary, dist=dist, 
         boundary_dist=boundary_dist, sorting=sorting)
     write_points_to_file(inner, boundary, stencil_size, filename)
+    
+    f.close()
 
