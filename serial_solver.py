@@ -36,6 +36,11 @@ def poly_basis_L(k):
                     + x[0]**(deg-i) * i*(i-1)*x[1]**(i-2)
                    ]
         deg += 1
+    #testing Center evauluation of Lp(x,y) at x,y. Simplifies to 1 and 0s.
+    ret = [lambda x: 1]
+    while len(ret)<k:
+        ret += [lambda x: 0]
+    #end testing
     return ret[:k]
 
 #**************************************************************************
