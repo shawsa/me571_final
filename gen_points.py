@@ -1,3 +1,5 @@
+import sys, getopt
+
 import numpy as np
 from halton import halton_sequence
 from scipy.spatial import cKDTree
@@ -21,7 +23,7 @@ def boundary_param(t):
     return (np.cos(2*np.pi*t), np.sin(2*np.pi*t))
 
 
-def gen_points(n, n_boundary, dist='vogel', boundary_dist='equal', sorting='x'):
+def gen_points(n, n_boundary, dist='vogel', boundary_dist='vogel', sorting='x'):
     if dist == 'vogel':
         inner_nodes = vogel(n)
     elif dist == 'halton':
@@ -93,4 +95,38 @@ def gen_points_file(
         n, n_boundary, dist=dist, 
         boundary_dist=boundary_dist, sorting=sorting)
     write_points_to_file(inner, boundary, stencil_size, filename)
+
+def read_points(filename):
+    f = open(filename, 'rb')
+    n = int.from_bytes(f.read(4), 'little')
+    nb = int.from_bytes(f.read(4), 'little')
+    l = int.from_bytes(f.read(4), 'little')
+    
+    xs = np.fromfile(f, dtype='d', count=n+nb)
+    ys = np.fromfile(f, dtype='d', count=n+nb)
+    nn = np.fromfile(f, dtype='i', count=n*l).reshape((n, l))
+    
+    #return xs, ys, nn
+    nodes = [(x,y) for x,y in zip(xs,ys)]
+    inner = nodes[:n]
+    boundary = nodes[n:]
+    return inner, boundary
+
+if __name__ == '__main__':
+    try:
+      opts, args = getopt.getopt(sys.argv[1:], "n:b:l:")
+    except getopt.GetoptError:
+      print('GetOptError')
+      sys.exit(2)
+    for opt, arg in opts:
+        if opt == '-n':
+            n = int(arg)
+        elif opt == "-b":
+            nb = int(arg)
+        elif opt == "-l":
+            l = int(arg)
+    filename = 'point_sets/n' + str(n) + '_' + 'nb' + str(nb) + '_' + 'l' + str(l) + '.dat'
+    gen_points_file(n, nb, l, filename=filename)
+    
+            
 
