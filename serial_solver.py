@@ -12,6 +12,11 @@ from scipy.sparse.csgraph import reverse_cuthill_mckee as rcm
 # point generation
 from gen_points import *
 
+# plotting
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+from scipy.interpolate import griddata
+
 #**************************************************************************
 #
 # Polynomial Basis Terms
@@ -66,7 +71,7 @@ def rbf1d(r):
 def boundary(x):
     return x[0]
 
-def gen_system(inner_nodes, boundary_nodes, l, pdim, rbf_tag='r^3'):
+def gen_system(inner_nodes, boundary_nodes, l, pdim, rbf_tag='r^3', boundary=boundary):
     if rbf_tag=='r^3':
         rbf = lambda x,y: rbf0(dist(x,y))
         rbfd = lambda x,y: rbf0d(dist(x,y))
@@ -103,19 +108,66 @@ def gen_system(inner_nodes, boundary_nodes, l, pdim, rbf_tag='r^3'):
         weights[r] = (la.pinv(AP)@rhs)[:l]
         col_index[r] = n_index
         
-    C = sp.csr_matrix((weights.ravel(), (row_index, col_index.ravel())),shape=(n,n+n_b))
+    C = sp.csc_matrix((weights.ravel(), (row_index, col_index.ravel())),shape=(n,n+n_b))
 
     b_vec = np.array([-boundary(x) for x in boundary_nodes])
     return C, b_vec
 
 
-def rbf_fd(inner_nodes, boundary_nodes, l, pdim, rbf_tag='r^3'):
+def rbf_fd(inner_nodes, boundary_nodes, l, pdim, rbf_tag='r^3', boundary=boundary):
     n = len(inner_nodes)
     n_b = len(boundary_nodes)
-    C, b_vec = gen_system(inner_nodes, boundary_nodes, l, pdim, rbf_tag=rbf_tag)
-    u = spsolve(C[:,:n], C[:,n:]@b_vec)
+    C, b_vec = gen_system(
+        inner_nodes, boundary_nodes, l, pdim, 
+        rbf_tag=rbf_tag, 
+        boundary=boundary)
+    A_mat = C[:,:n]
+    rhs = C[:,n:]@b_vec
+    tol = 1e-14
+    if n<=400:
+        u = spsolve(A_mat,rhs)
+    else:
+        ilu_A = spilu(A_mat)
+        M = LinearOperator((n,n), lambda x: ilu_A.solve(x))
+        u, info = gmres(A_mat, rhs, M=M, tol=tol)
+        if info != 0:
+            print('gmres failed')
+            print('n: %d\tinfo: %d' % (n, info))
+            u = spsolve(A_mat, rhs)
+            
     u = np.concatenate((u.ravel(), -b_vec.ravel()), axis=0)
     return u, C, b_vec
+
+
+def plot_disk(inner_nodes, boundary_nodes, u, points = False, boundary=False):
+    nodes = np.array(inner_nodes + boundary_nodes)
+    n = len(inner_nodes)
+    xs = nodes[:,0]
+    ys = nodes[:,1]
+
+    # define grid.
+    xi = np.linspace(-1,1,100)
+    yi = np.linspace(-1,1,100)
+    # grid the data.
+    zi = griddata((xs, ys), u, (xi[None,:], yi[:,None]), method='cubic')
+    #zi = np.nan_to_num(zi)
+    zi = np.ma.masked_invalid(zi)
+    X, Y = np.meshgrid(xi, yi)
+
+    plt.pcolormesh(X,Y,zi, cmap=cm.coolwarm)
+    plt.xlabel('x')
+    plt.ylabel('y')
+    if points:
+        plt.plot(nodes[:n,0], nodes[:n,1], 'k.')
+    if boundary:
+        plt.plot(nodes[n:,0], nodes[n:,1], 'y.')
+    plt.show()
+
+
+
+
+
+
 
 
 

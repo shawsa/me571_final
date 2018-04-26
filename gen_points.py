@@ -7,9 +7,9 @@ from array import array
 
 def halton(n):
     inner_nodes = halton_sequence(1,n,2).T
-    inner_nodes = np.array([(np.sqrt(x)*np.cos(2*np.pi*y), 
+    inner_nodes = [(np.sqrt(x)*np.cos(2*np.pi*y), 
                              np.sqrt(x)*np.sin(2*np.pi*y)) 
-                            for (x,y) in inner_nodes])
+                            for (x,y) in inner_nodes]
     return inner_nodes
 
 def vogel(n):
@@ -44,12 +44,19 @@ def gen_points(n, n_boundary, dist='vogel', boundary_dist='vogel', sorting='x'):
     else:
         raise ValueError('boundary_dist=' + boundary_dist + ' not recognized')
 
-    if sorting=='none':
+    if sorting==None:
         pass
     elif sorting=='x':
         #sort by x value
-        inner_nodes.sort(key=lambda x: x[0])
-        boundary_nodes.sort(key=lambda x: x[0])
+        if type(inner_nodes)==np.ndarray:
+            inner_nodes.sort(axis=0)
+        else:
+            inner_nodes.sort(key=lambda x: x[0])
+
+        if type(boundary_nodes)==np.ndarray:
+            boundary_nodes.sort(axis=0)
+        else:
+            boundary_nodes.sort(key=lambda x: x[0])
     else:
         raise ValueError('sorting=' + sorting + ' not recognized')
 

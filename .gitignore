@@ -2,6 +2,7 @@
 point_sets/*
 bin/*
 __pycache__/*
+*.ipynb*
 
 ## Core latex/pdflatex auxiliary files:
 *.aux
