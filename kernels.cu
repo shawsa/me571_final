@@ -1,5 +1,216 @@
+#include <math.h>
 
-
-__global__ void testKernel(double *xs, double *b){
-    b[blockIdx.x] = xs[blockIdx.x];
+__device__ double dist(double x1, double y1, double x2, double y2){
+    return sqrt((x1-x2)*(x1-x2) + (y1-y2)*(y1-y2));
 }
+
+
+
+
+
+__global__ void testKernel(double *xs, double *ys, double *b){
+    b[blockIdx.x] = dist(xs[blockIdx.x], 1.0, ys[blockIdx.x], 1.0);
+}
+
+
+
+
+
+/* r^3 */
+__device__ double rbf(double x1, double y1, double x2, double y2){
+	return pow(dist(x1, y1, x2, y2),3);
+}
+
+/* 6*r */
+__device__ double rbfd2(double x1, double y1, double x2, double y2){
+	return 6*dist(x1, y1, x2, y2);
+}
+
+/* n choose k */
+__device__ int choose(int n)
+{
+	n = n + 2;
+    int ans=1;
+    int k = 2;
+    k=k>n-k?n-k:k;
+    int j=1;
+    for(;j<=k;j++,n--)
+    {
+        if(n%j==0)
+        {
+            ans*=n/j;
+        }else
+        if(ans%j==0)
+        {
+            ans=ans/j*n;
+        }else
+        {
+            ans=(ans*n)/j;
+        }
+    }
+    return ans;
+}
+
+/* Gaussian Elimination */
+__device__ void gauss_elim(double *A, double *b, double *x, int n){
+
+	int i, j, k;
+	int idxi, idxj, idxij, idxik, idxjk;
+	double m, diff;
+
+	// Swap first and second rows
+	int r1 = 0;
+    int r2 = 1;
+    double mtemp, vtemp;
+    int idx1;
+    int idx2;
+    for (i = 0; i < n; ++i)
+    {
+        // matrix swap
+        idx1 = r1*n + i;
+        idx2 = r2*n + i;
+        mtemp = A[idx1];
+        A[idx1] = A[idx2];
+        A[idx2] = mtemp;
+    }
+
+    // RHS vector swap
+    vtemp = b[1];
+    b[1] = b[0];
+    b[0] = vtemp;
+
+	// Gauss-Jordan Forward Elimination to Upper triangular matrix
+	for (j = 0; j < n-1; j++){
+        for (i = j+1; i < n; i++){
+        	idxij = i*n + j;
+        	idxj = j*n + j;
+            m = A[idxij]/A[idxj];
+            for (k = 0; k < n; k++){
+            	idxik = i*n + k;
+        		idxjk = j*n + k;
+                A[idxik] = A[idxik] - m*A[idxjk];
+            }
+            b[i] = b[i] - m*b[j];
+        }
+    }
+
+    // Back substituion
+    for (i = n-1; i >= 0; i--){
+        diff = b[i];
+        for (j = i+1; j < n; j++){
+        	idxij = i*n + j;
+            diff = diff - x[j]*A[idxij];
+        }
+        idxi = i*n + i;
+        x[i] = diff/A[idxi];
+	}
+
+}
+
+
+__global__ void genDMatrix(double* xs, double* ys, 
+                    int* nn, double* weights, 
+                    double* full_mat1_root, double* RHS1_root,
+                    int l, int deg){
+    int my_id = blockDim.x*blockIdx.x + threadIdx.x;
+
+    //int k = 0;
+    int k = my_id;
+    int i, j;
+    int pdim = (deg+1)*(deg+2)/2; //choose(deg);
+    //double full_mat1[l+pdim][l+pdim];
+    double* full_mat1 = &full_mat1_root[my_id * (l+pdim)*(l+pdim)];
+    //double RHS1[l+pdim];
+    double* RHS1 = &RHS1_root[my_id * (l+pdim)];
+
+    // Make matrix 0
+    for(i = 0; i < l + pdim; i++){
+    	for(j = 0; j < l + pdim; j++){
+    		full_mat1[i*(l+pdim) + j] = 0.0;
+    	}
+    }
+
+    // Build A and O matrices
+    for(i = 0; i < l + pdim; i++){
+    	for(j = 0; j < l + pdim; j++){
+    		if(i < l && j < l){
+    			full_mat1[i*(l+pdim)+j] = rbf(
+                            xs[nn[k*l+i]], ys[nn[k*l+j]], 
+                            xs[nn[k*l+i]], ys[nn[k*l+j]]);
+    		}
+    		else if(i >= l && j>= l){
+    			full_mat1[i*(l+pdim) + j] = 0.0;
+    		}
+    	}
+    }
+
+    // Build P matrix
+    int d = deg;
+    int xp = 0;
+    int yp = d;
+    	for(j = l+pdim - 1; j >= l; j--){
+    		for(i = 0; i < l; i++){
+    			full_mat1[i*(l+pdim) + j] = pow(xs[nn[k*l+i]],xp)*pow(ys[nn[k*l+i]],yp);
+    		}
+    		if(yp - 1 < 0){
+    			--d;
+    			yp = d;
+    			xp = 0;
+    		}
+    		else{
+    			xp++;
+    			yp--;    		
+    		}
+    	}
+
+
+    // Build P transpose matrix
+    d = deg;
+    xp = 0;
+    yp = d;
+    	for(i = l+pdim - 1; i >= l; i--){
+    		for(j = 0; j < l; j++){
+    			full_mat1[i*(l+pdim) + j] = pow(xs[nn[k*l+j]],xp)*pow(ys[nn[k*l+j]],yp);
+    		}
+    		if(yp - 1 < 0){
+    			--d;
+    			yp = d;
+    			xp = 0;
+    		}
+    		else{
+    			xp++;
+    			yp--;    		
+    		}
+    	}
+
+    // RHS vector
+    for(i = 0; i < l + pdim; i++){
+    	if(i < l){
+    		RHS1[i] = rbfd2(xs[nn[k*l+0]],ys[nn[k*l+0]],xs[nn[k*l+i]],ys[nn[k*l+i]]);
+    	}
+    	else{
+    		RHS1[i] = 0.0;
+    	}
+    }
+
+    gauss_elim(full_mat1, RHS1, weights, l+pdim); 
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
