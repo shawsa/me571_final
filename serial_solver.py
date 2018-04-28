@@ -22,15 +22,16 @@ from scipy.interpolate import griddata
 # Polynomial Basis Terms
 #
 #**************************************************************************
-def poly_basis(k):
+def poly_basis(k, node):
+    x0, y0 = node
     ret = []
     deg = 0
     while len(ret)<k:
         for i in range(deg+1):
-            ret += [lambda x, i=i, deg=deg, : x[0]**(deg-i) * x[1]**i]
+            ret += [lambda x, i=i, deg=deg, : (x[0]-x0)**(deg-i) * (x[1]-y0)**i]
         deg += 1
     return ret[:k]
-
+'''
 def poly_basis_L(k):
     ret = []
     deg = 0
@@ -47,7 +48,7 @@ def poly_basis_L(k):
         ret += [lambda x: 0]
     #end testing
     return ret[:k]
-
+'''
 #**************************************************************************
 #
 # RBFs
@@ -92,14 +93,15 @@ def gen_system(inner_nodes, boundary_nodes, l, pdim, rbf_tag='r^3', boundary=bou
     nodes = np.concatenate((inner_nodes, boundary_nodes), axis=0)
     tree = cKDTree(nodes)
 
-    pbasis = poly_basis(pdim)
-    pbasisL = poly_basis_L(pdim)
+    #pbasis = poly_basis(pdim)
+    #pbasisL = poly_basis_L(pdim)
     weights = np.zeros((n, l))
     #row_index = []
     row_index = [r for r in range(n) for c in range(l)]
     col_index = np.zeros((n, l))
 
     for r in range(n):
+        pbasis = poly_basis(pdim, nodes[r])
         n_index = tree.query(nodes[r], l)[1]
         neighbors = [nodes[i] for i in n_index]
         A = np.array([[rbf(x,y) for x in neighbors] for y in neighbors]).reshape((l,l))
@@ -107,7 +109,11 @@ def gen_system(inner_nodes, boundary_nodes, l, pdim, rbf_tag='r^3', boundary=bou
         AP = np.block([[A.reshape((l,l)), P],[P.T, np.zeros((pdim,pdim))]])
     
         rhs = np.array([rbfd(nodes[r], nodes[i]) for i in n_index])
-        rhsp = np.array([pd(nodes[r]) for pd in pbasisL])
+        #rhsp = np.array([pd(nodes[r]) for pd in pbasisL])
+        rhsp = np.array([0]*pdim)
+        if pdim>3: rhsp[3] = 2
+        if pdim>5: rhsp[5] = 2
+        
         rhs = np.block([rhs.ravel(), rhsp.ravel()])
 
         weights[r] = (la.pinv(AP)@rhs)[:l]

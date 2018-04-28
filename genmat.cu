@@ -65,12 +65,14 @@ int main(int argc, char** argv){
    
     free(xs_local);
     free(ys_local);
+    free(b_local);
     free(nn);
 
     cudaFree(xs);
     cudaFree(ys);
     cudaFree(b);
-    free(b_local);
 
+
+    return 0;
 
 }
