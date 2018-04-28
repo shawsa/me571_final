@@ -109,7 +109,7 @@ __device__ void gauss_elim(double *A, double *b, double *x, int n){
 
 
 __global__ void genDMatrix(double* xs, double* ys, 
-                    int* nn, double* weights, 
+                    int* nn, double* weights_root, 
                     double* full_mat1_root, double* RHS1_root,
                     int l, int deg){
     int my_id = blockDim.x*blockIdx.x + threadIdx.x;
@@ -122,6 +122,8 @@ __global__ void genDMatrix(double* xs, double* ys,
     double* full_mat1 = &full_mat1_root[my_id * (l+pdim)*(l+pdim)];
     //double RHS1[l+pdim];
     double* RHS1 = &RHS1_root[my_id * (l+pdim)];
+    
+    double* weights = &weights_root[my_id * (l+pdim)];
 
     // Make matrix 0
     for(i = 0; i < l + pdim; i++){
@@ -135,8 +137,8 @@ __global__ void genDMatrix(double* xs, double* ys,
     	for(j = 0; j < l + pdim; j++){
     		if(i < l && j < l){
     			full_mat1[i*(l+pdim)+j] = rbf(
-                            xs[nn[k*l+i]], ys[nn[k*l+j]], 
-                            xs[nn[k*l+i]], ys[nn[k*l+j]]);
+                            xs[nn[k*l+i]], ys[nn[k*l+i]], 
+                            xs[nn[k*l+j]], ys[nn[k*l+j]]);
     		}
     		else if(i >= l && j>= l){
     			full_mat1[i*(l+pdim) + j] = 0.0;
@@ -150,7 +152,9 @@ __global__ void genDMatrix(double* xs, double* ys,
     int yp = d;
     	for(j = l+pdim - 1; j >= l; j--){
     		for(i = 0; i < l; i++){
-    			full_mat1[i*(l+pdim) + j] = pow(xs[nn[k*l+i]],xp)*pow(ys[nn[k*l+i]],yp);
+    			full_mat1[i*(l+pdim) + j] = 
+                        pow(xs[nn[k*l+i]] - xs[nn[k*l+0]], xp) * 
+                        pow(ys[nn[k*l+i]] - ys[nn[k+l+0]], yp);
     		}
     		if(yp - 1 < 0){
     			--d;
@@ -170,7 +174,8 @@ __global__ void genDMatrix(double* xs, double* ys,
     yp = d;
     	for(i = l+pdim - 1; i >= l; i--){
     		for(j = 0; j < l; j++){
-    			full_mat1[i*(l+pdim) + j] = pow(xs[nn[k*l+j]],xp)*pow(ys[nn[k*l+j]],yp);
+    			//full_mat1[i*(l+pdim) + j] = pow(xs[nn[k*l+j]],xp)*pow(ys[nn[k*l+j]],yp);
+    			full_mat1[i*(l+pdim) + j] = full_mat1[j*(l+pdim) + i];
     		}
     		if(yp - 1 < 0){
     			--d;
@@ -188,6 +193,9 @@ __global__ void genDMatrix(double* xs, double* ys,
     	if(i < l){
     		RHS1[i] = rbfd2(xs[nn[k*l+0]],ys[nn[k*l+0]],xs[nn[k*l+i]],ys[nn[k*l+i]]);
     	}
+        else if(i==l+3 || i==l+5){
+            RHS1[i] = 2.0;
+        }
     	else{
     		RHS1[i] = 0.0;
     	}

@@ -12,7 +12,7 @@ int main(int argc, char** argv){
     fread(&nb, sizeof(int), 1, fp);
     fread(&l, sizeof(int), 1, fp);
     //read degree
-    int deg = 2;
+    int deg = 0;
     int pdim = (deg+1)*(deg+2)/2;
     //printf("%d\t%d\t%d\n", n, nb, l);
 
@@ -59,12 +59,35 @@ int main(int argc, char** argv){
 
     genDMatrix<<<n,1>>>(xs, ys, nn, weights, full_mat1_root, RHS1_root, l, deg);
 
+
+
+    
+    double *test = (double*) malloc(sizeof(double)*(l+pdim)*(l+pdim));
+    double *test2 = (double*) malloc(sizeof(double)*(l+pdim));
+    cudaMemcpy(test, full_mat1_root, (l+pdim)*(l+pdim)*sizeof(double), cudaMemcpyDeviceToHost);
+    cudaMemcpy(test2, RHS1_root, (l+pdim)*sizeof(double), cudaMemcpyDeviceToHost);
+    for(int i=0; i<l+pdim; i++){
+        for(int j=0; j<l+pdim; j++){
+            printf("%f\t", test[i*(l+pdim)+j]);
+        }
+        printf("\n");
+    }
+    for(int i=0; i<l+pdim; i++){
+        printf("%f\n", test2[i]);
+    }
+    free(test);
+
+
+
+
+
+
     double *w_local = (double*) malloc(n*(l+pdim)*sizeof(double));
     cudaMemcpy(w_local, weights, n*(l+pdim)*sizeof(double), cudaMemcpyDeviceToHost);
 
     for(int i=0; i < n; i++){
-        for(int j=0; j<l; j++){
-            printf("%f\t", w_local[i*l + j]);
+        for(int j=0; j<l+pdim; j++){
+            printf("%f\t", w_local[i*(l+pdim) + j]);
         }
         printf("\n");
     }
