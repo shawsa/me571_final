@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 #include "kernels.h"
 #include "demo_util.h"
 
@@ -36,7 +37,7 @@ int main(int argc, char** argv){
     printf("\n\n");
     
 
-    int deg, l, debug;
+    int deg, l, debug, tpb;
     err = 0;
     read_int(argc, argv, (char*)"-d", &deg, &err);
     if(err!=0){deg = 0;}
@@ -50,6 +51,11 @@ int main(int argc, char** argv){
     err = 0;
     read_int(argc, argv, (char*)"--debug", &debug, &err);
     if(err!=0){debug = 0;}
+
+    err = 0;
+    read_int(argc, argv, (char*)"--tpb", &tpb, &err);
+    if(err!=0){tpb = 1024;}
+
 
     /*************************************************************************
     *
@@ -65,7 +71,13 @@ int main(int argc, char** argv){
     fread(&n, sizeof(int), 1, fp);
     fread(&nb, sizeof(int), 1, fp);
     fread(&l_max, sizeof(int), 1, fp);
-    //read degree
+
+    //Read 2 dummy ints. This is for compatability with reading matrix files
+    int fake_int;
+    fread(&fake_int, sizeof(int), 1, fp);
+    fread(&fake_int, sizeof(int), 1, fp);
+
+    //calculate number of pbasis terms = deg+1 choose 2
     int pdim = (deg+1)*(deg+2)/2;
 
     //Print n, nb, and max stencil size
@@ -87,6 +99,15 @@ int main(int argc, char** argv){
         return 1;
     }
     
+    
+    
+    /**************************************************************************
+    *
+    * Start clock
+    *
+    **************************************************************************/
+    clock_t begin_time, end_time;
+    begin_time = clock();
     
     /**************************************************************************
     *
@@ -120,8 +141,9 @@ int main(int argc, char** argv){
     cudaMemcpy(ys, ys_local, (n+nb)*sizeof(double), cudaMemcpyHostToDevice);
     cudaMemcpy(nn, nn_local, (n*l_max)*sizeof(int), cudaMemcpyHostToDevice); 
 
-
-    genDMatrix<<<n,1>>>(xs, ys, nn, weights, full_mat1_root, RHS1_root, l_max, l, deg);
+    dim3 block(tpb);
+    dim3 grid((n+tpb-1)/tpb);
+    genDMatrix<<<block,grid>>>(xs, ys, nn, weights, full_mat1_root, RHS1_root, l_max, l, deg);
 
 
     /**************************************************************************
@@ -174,18 +196,49 @@ int main(int argc, char** argv){
 
     /*************************************************************************
     *
+    * Stop timer
+    *
+    **************************************************************************/
+    end_time = clock();
+    printf("\n\nRuntime: %fms\n", ((double)(end_time - begin_time)) * 1000.0/CLOCKS_PER_SEC);
+
+    /*************************************************************************
+    *
     * Write to output file
+    * n, nb, l_max, l, deg
+    * xs, ys, nn
+    * weights
     *
     **************************************************************************/
 
     char outPath[150];
-    strcat(outPath, fullPath);
+    strcpy(outPath, "weights/");
+    strcat(outPath, filename);
     strcat(outPath, ".mat");
     printf("\nWriting to ");
     printf(outPath);
     printf("\n\n");
 
 
+
+    fp = fopen(outPath, "w");
+    
+    fwrite(&n, sizeof(int), 1, fp);
+    fwrite(&nb, sizeof(int), 1, fp);
+    fwrite(&l_max, sizeof(int), 1, fp);
+    fwrite(&l, sizeof(int), 1, fp);
+    fwrite(&deg, sizeof(int), 1, fp);
+
+    fwrite(xs_local, sizeof(double), n+nb, fp);
+    fwrite(ys_local, sizeof(double), n+nb, fp);
+    fwrite(nn_local, sizeof(int), n*l_max, fp);
+
+    fwrite(w_local, sizeof(double), n*(l_max+pdim), fp);
+
+    fclose(fp);
+
+
+    //Free memory
     free(xs_local);
     free(ys_local);
     free(nn_local);

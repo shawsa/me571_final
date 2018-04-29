@@ -1,6 +1,7 @@
 import sys, getopt
 
 import numpy as np
+import scipy.sparse as sp
 from halton import halton_sequence
 from scipy.spatial import cKDTree
 from array import array
@@ -69,9 +70,12 @@ def write_points_to_file(inner, boundary, stencil_size, filename=None):
     nn = [tree.query(node, stencil_size)[1] for node in nodes]
 
     if filename==None:
-        filename = 'n'+ str(len(inner)) + '_nb' + str(len(boundary)) + '.dat'
+        filename = ('n'+ str(len(inner)) + '_nb' + 
+                    str(len(boundary)) + '_l' + 
+                    str(stencil_size) +'.dat')
     
-    f = open(filename, 'wb')
+
+    f = open( 'point_sets/' + filename, 'wb')
 
     # write n, nb, l
     n = len(inner)
@@ -79,6 +83,11 @@ def write_points_to_file(inner, boundary, stencil_size, filename=None):
     nb = len(boundary)
     f.write(nb.to_bytes(4,'little'))
     f.write(stencil_size.to_bytes(4,'little'))
+    
+    # write two dummy ints for compatability with read mat
+    fakeint = int(0)
+    f.write(fakeint.to_bytes(4,'little'))
+    f.write(fakeint.to_bytes(4,'little'))
 
     # write xs
     my_array = array('d', [node[0] for node in nodes])
@@ -107,17 +116,46 @@ def read_points(filename):
     f = open(filename, 'rb')
     n = int.from_bytes(f.read(4), 'little')
     nb = int.from_bytes(f.read(4), 'little')
+    l_max = int.from_bytes(f.read(4), 'little')
     l = int.from_bytes(f.read(4), 'little')
+    deg = int.from_bytes(f.read(4), 'little')
     
     xs = np.fromfile(f, dtype='d', count=n+nb)
     ys = np.fromfile(f, dtype='d', count=n+nb)
-    nn = np.fromfile(f, dtype='i', count=n*l).reshape((n, l))
+    nn = np.fromfile(f, dtype='i', count=n*l).reshape((n, l_max))
     
     #return xs, ys, nn
     nodes = [(x,y) for x,y in zip(xs,ys)]
     inner = nodes[:n]
     boundary = nodes[n:]
     return inner, boundary
+
+def read_matrix(filename):
+    f = open(filename, 'rb')
+    n = int.from_bytes(f.read(4), 'little')
+    nb = int.from_bytes(f.read(4), 'little')
+    l_max = int.from_bytes(f.read(4), 'little')
+    l = int.from_bytes(f.read(4), 'little')
+    deg = int.from_bytes(f.read(4), 'little')
+    pdim = (deg+1)*(deg+2)//2
+
+    #print(n, nb, l_max, l, deg)
+    
+    xs = np.fromfile(f, dtype='d', count=n+nb)
+    ys = np.fromfile(f, dtype='d', count=n+nb)
+    nn = np.fromfile(f, dtype='i', count=n*l_max).reshape((n, l_max))
+    weights = np.fromfile(f, dtype='d', count=n*(l+pdim)).reshape((n,l+pdim))
+
+    row_index = [r for r in range(n) for c in range(l)]
+    col_index = nn[:, :l].ravel()
+    C = sp.csc_matrix((weights[:,:l].ravel(), (row_index, col_index)),shape=(n,n+nb))
+    #print(len(row_index), len(col_index), len(weights))
+    
+    #return xs, ys, C
+    nodes = [(x,y) for x,y in zip(xs,ys)]
+    inner = nodes[:n]
+    boundary = nodes[n:]
+    return inner, boundary, C, l, pdim
 
 if __name__ == '__main__':
     try:

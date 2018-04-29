@@ -174,12 +174,18 @@ def plot_disk(inner_nodes, boundary_nodes, u, points = False, boundary=False):
         plt.plot(nodes[n:,0], nodes[n:,1], 'y.')
     plt.show()
 
+#**************************************************************************
+#
+# Checking output of CUDA
+#
+#**************************************************************************
 
 
-
-
-
-
+def check_output(filename):
+    inner, outer, C, l, pdim = read_matrix(filename)
+    D, b_vec = gen_system(inner, outer, l, pdim)
+    max_error = np.max(np.abs(C-D))
+    return max_error, C, D
 
 
 #**************************************************************************
