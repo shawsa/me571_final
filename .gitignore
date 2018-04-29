@@ -1,6 +1,7 @@
 
 point_sets/*
 bin/*
+weights/*
 __pycache__/*
 *.ipynb*
 

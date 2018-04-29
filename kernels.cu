@@ -26,30 +26,6 @@ __device__ double rbfd2(double x1, double y1, double x2, double y2){
 	return 6*dist(x1, y1, x2, y2);
 }
 
-/* n choose k */
-__device__ int choose(int n)
-{
-	n = n + 2;
-    int ans=1;
-    int k = 2;
-    k=k>n-k?n-k:k;
-    int j=1;
-    for(;j<=k;j++,n--)
-    {
-        if(n%j==0)
-        {
-            ans*=n/j;
-        }else
-        if(ans%j==0)
-        {
-            ans=ans/j*n;
-        }else
-        {
-            ans=(ans*n)/j;
-        }
-    }
-    return ans;
-}
 
 /* Gaussian Elimination */
 __device__ void gauss_elim(double *A, double *b, double *x, int n){
@@ -111,18 +87,15 @@ __device__ void gauss_elim(double *A, double *b, double *x, int n){
 __global__ void genDMatrix(double* xs, double* ys, 
                     int* nn, double* weights_root, 
                     double* full_mat1_root, double* RHS1_root,
-                    int l, int deg){
+                    int l_max, int l, int deg){
     int my_id = blockDim.x*blockIdx.x + threadIdx.x;
 
     //int k = 0;
     int k = my_id;
     int i, j;
-    int pdim = (deg+1)*(deg+2)/2; //choose(deg);
-    //double full_mat1[l+pdim][l+pdim];
+    int pdim = (deg+1)*(deg+2)/2; 
     double* full_mat1 = &full_mat1_root[my_id * (l+pdim)*(l+pdim)];
-    //double RHS1[l+pdim];
     double* RHS1 = &RHS1_root[my_id * (l+pdim)];
-    
     double* weights = &weights_root[my_id * (l+pdim)];
 
     // Make matrix 0
@@ -137,8 +110,8 @@ __global__ void genDMatrix(double* xs, double* ys,
     	for(j = 0; j < l + pdim; j++){
     		if(i < l && j < l){
     			full_mat1[i*(l+pdim)+j] = rbf(
-                            xs[nn[k*l+i]], ys[nn[k*l+i]], 
-                            xs[nn[k*l+j]], ys[nn[k*l+j]]);
+                            xs[nn[k*l_max+i]], ys[nn[k*l_max+i]], 
+                            xs[nn[k*l_max+j]], ys[nn[k*l_max+j]]);
     		}
     		else if(i >= l && j>= l){
     			full_mat1[i*(l+pdim) + j] = 0.0;
@@ -153,8 +126,8 @@ __global__ void genDMatrix(double* xs, double* ys,
     	for(j = l+pdim - 1; j >= l; j--){
     		for(i = 0; i < l; i++){
     			full_mat1[i*(l+pdim) + j] = 
-                        pow(xs[nn[k*l+i]] - xs[nn[k*l+0]], xp) * 
-                        pow(ys[nn[k*l+i]] - ys[nn[k+l+0]], yp);
+                        pow(xs[nn[k*l_max+i]] - xs[nn[k*l_max+0]], xp) * 
+                        pow(ys[nn[k*l_max+i]] - ys[nn[k+l_max+0]], yp);
     		}
     		if(yp - 1 < 0){
     			--d;
@@ -191,7 +164,9 @@ __global__ void genDMatrix(double* xs, double* ys,
     // RHS vector
     for(i = 0; i < l + pdim; i++){
     	if(i < l){
-    		RHS1[i] = rbfd2(xs[nn[k*l+0]],ys[nn[k*l+0]],xs[nn[k*l+i]],ys[nn[k*l+i]]);
+    		RHS1[i] = rbfd2(
+                    xs[nn[k*l_max+0]], ys[nn[k*l_max+0]],
+                    xs[nn[k*l_max+i]], ys[nn[k*l_max+i]]);
     	}
         else if(i==l+3 || i==l+5){
             RHS1[i] = 2.0;
@@ -204,21 +179,4 @@ __global__ void genDMatrix(double* xs, double* ys,
     gauss_elim(full_mat1, RHS1, weights, l+pdim); 
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
