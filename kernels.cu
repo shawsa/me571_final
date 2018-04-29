@@ -83,21 +83,11 @@ __device__ void gauss_elim(double *A, double *b, double *x, int n){
 
 }
 
-
-__global__ void genDMatrix(double* xs, double* ys, 
-                    int* nn, double* weights_root, 
-                    double* full_mat1_root, double* RHS1_root,
-                    int l_max, int l, int deg){
-    int my_id = blockDim.x*blockIdx.x + threadIdx.x;
-
-    //int k = 0;
-    int k = my_id;
+__device__ void build_stencil_matrix(double* xs, double* ys, 
+                    int* nn,  double* full_mat1, double* RHS1,
+                    int l_max, int l, int deg, int k){
+    int pdim = (deg+1)*(deg+2)/2;
     int i, j;
-    int pdim = (deg+1)*(deg+2)/2; 
-    double* full_mat1 = &full_mat1_root[my_id * (l+pdim)*(l+pdim)];
-    double* RHS1 = &RHS1_root[my_id * (l+pdim)];
-    double* weights = &weights_root[my_id * (l+pdim)];
-
     // Make matrix 0
     for(i = 0; i < l + pdim; i++){
     	for(j = 0; j < l + pdim; j++){
@@ -175,8 +165,24 @@ __global__ void genDMatrix(double* xs, double* ys,
     		RHS1[i] = 0.0;
     	}
     }
+}
 
-    gauss_elim(full_mat1, RHS1, weights, l+pdim); 
 
+__global__ void genDMatrix(int n, double* xs, double* ys, 
+                    int* nn, double* weights_root, 
+                    double* full_mat1_root, double* RHS1_root,
+                    int l_max, int l, int deg){
+
+    int my_id = blockDim.x*blockIdx.x + threadIdx.x;
+    int pdim = (deg+1)*(deg+2)/2; 
+   
+    if(my_id <n){ 
+        double* full_mat1 = &full_mat1_root[my_id * (l+pdim)*(l+pdim)];
+        double* RHS1 = &RHS1_root[my_id * (l+pdim)];
+        double* weights = &weights_root[my_id * (l+pdim)];
+
+        build_stencil_matrix(xs, ys, nn, full_mat1, RHS1, l_max, l, deg, my_id); 
+        gauss_elim(full_mat1, RHS1, weights, l+pdim); 
+    }
 }
 

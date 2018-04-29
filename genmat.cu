@@ -143,7 +143,7 @@ int main(int argc, char** argv){
 
     dim3 block(tpb);
     dim3 grid((n+tpb-1)/tpb);
-    genDMatrix<<<block,grid>>>(xs, ys, nn, weights, full_mat1_root, RHS1_root, l_max, l, deg);
+    genDMatrix<<<block,grid>>>(n, xs, ys, nn, weights, full_mat1_root, RHS1_root, l_max, l, deg);
 
 
     /**************************************************************************
@@ -200,7 +200,8 @@ int main(int argc, char** argv){
     *
     **************************************************************************/
     end_time = clock();
-    printf("\n\nRuntime: %fms\n", ((double)(end_time - begin_time)) * 1000.0/CLOCKS_PER_SEC);
+    double total_tics = (double) end_time-begin_time;
+    printf("\n\nRuntime: %fms\n", total_tics * 1000.0/CLOCKS_PER_SEC);
 
     /*************************************************************************
     *
